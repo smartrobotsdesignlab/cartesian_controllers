@@ -172,6 +172,13 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
       return false;
     }
 
+    /**
+     * @brief Helper method to check the controller's state during input callbacks
+     *
+     * @return True if the controller is active, false otherwise
+     */
+    bool isActive() const {return m_active;};
+
     KDL::Chain m_robot_chain;
 
     std::shared_ptr<KDL::TreeFkSolverPos_recursive> m_forward_kinematics_solver;
@@ -231,7 +238,7 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
     // Against multi initialization in multi inheritance scenarios
     bool m_initialized = {false};
     bool m_configured = {false};
-    bool m_active = {false};
+    std::atomic<bool> m_active = {false};
 
     // Dynamic parameters
     double m_error_scale;
