@@ -223,6 +223,8 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
     std::vector<std::reference_wrapper<hardware_interface::LoanedCommandInterface>> m_joint_cmd_pos_handles;
     std::vector<std::reference_wrapper<hardware_interface::LoanedCommandInterface>> m_joint_cmd_vel_handles;
 
+    rclcpp::SyncParametersClient::SharedPtr           m_urdf_param_client;
+
     std::vector<std::string>                          m_joint_names;
     trajectory_msgs::msg::JointTrajectoryPoint        m_simulated_joint_motion;
     SpatialPDController                               m_spatial_controller;

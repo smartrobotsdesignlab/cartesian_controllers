@@ -158,7 +158,23 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   urdf::Model robot_model;
   KDL::Tree   robot_tree;
 
-  m_robot_description = get_node()->get_parameter("robot_description").as_string();
+  // Get the robot description from the parameter server
+  // Create a temp Node for getting the robot_description
+  rclcpp::Node::SharedPtr temp_node = std::make_shared<rclcpp::Node>("temp_node");
+  m_urdf_param_client = std::make_shared<rclcpp::SyncParametersClient>(temp_node, "/robot_state_publisher");
+  RCLCPP_INFO(get_node()->get_logger(), "Waiting for global parameter server...");
+  using namespace std::chrono_literals;
+  bool success = m_urdf_param_client->wait_for_service(5s);
+  if (!success) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cannot connect to global parameter server.");
+    return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
+  }
+  auto parameters = m_urdf_param_client->get_parameters({"robot_description"});
+  for (auto & param : parameters) {
+      m_robot_description = param.value_to_string();
+  }
+  RCLCPP_INFO(get_node()->get_logger(), "Robot URDF Found!");
+
   if (m_robot_description.empty())
   {
     RCLCPP_ERROR(get_node()->get_logger(), "robot_description is empty");
@@ -234,6 +250,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   tmp.addChain(m_robot_chain,"not_relevant");
   m_forward_kinematics_solver.reset(new KDL::TreeFkSolverPos_recursive(tmp));
   m_iterations = get_node()->get_parameter("solver.iterations").as_int();
+  RCLCPP_INFO(get_node()->get_logger(), "Using %d iterations for inverse kinematics", m_iterations);
   m_error_scale = get_node()->get_parameter("solver.error_scale").as_double();
 
   // Initialize Cartesian pd controllers
