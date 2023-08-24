@@ -257,12 +257,23 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   // Compute how the measured wrench appears in the frame of interest.
   tmp = m_ft_sensor_transform * tmp;
 
-  m_ft_sensor_wrench[0] = tmp[0];
-  m_ft_sensor_wrench[1] = tmp[1];
-  m_ft_sensor_wrench[2] = tmp[2];
-  m_ft_sensor_wrench[3] = tmp[3];
-  m_ft_sensor_wrench[4] = tmp[4];
-  m_ft_sensor_wrench[5] = tmp[5];
+  // m_ft_sensor_wrench[0] = tmp[0];
+  // m_ft_sensor_wrench[1] = tmp[1];
+  // m_ft_sensor_wrench[2] = tmp[2];
+  // m_ft_sensor_wrench[3] = tmp[3];
+  // m_ft_sensor_wrench[4] = tmp[4];
+  // m_ft_sensor_wrench[5] = tmp[5];
+
+  // Low pass fileter
+  double alpha = 0.5;
+  m_ft_sensor_wrench[0] = alpha * tmp[0] + (1 - alpha) * m_ft_sensor_wrench[0];
+  m_ft_sensor_wrench[1] = alpha * tmp[1] + (1 - alpha) * m_ft_sensor_wrench[1];
+  m_ft_sensor_wrench[2] = alpha * tmp[2] + (1 - alpha) * m_ft_sensor_wrench[2];
+  m_ft_sensor_wrench[3] = alpha * tmp[3] + (1 - alpha) * m_ft_sensor_wrench[3];
+  m_ft_sensor_wrench[4] = alpha * tmp[4] + (1 - alpha) * m_ft_sensor_wrench[4];
+  m_ft_sensor_wrench[5] = alpha * tmp[5] + (1 - alpha) * m_ft_sensor_wrench[5];
+
+
 #elif defined CARTESIAN_CONTROLLERS_FOXY
   // We assume base frame for the measurements
   // This is currently URe-ROS2 driver-specific (branch foxy).

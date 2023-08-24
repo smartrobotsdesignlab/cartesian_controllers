@@ -66,12 +66,26 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
 
   constexpr double default_lin_stiff = 500.0;
   constexpr double default_rot_stiff = 50.0;
+
+  constexpr double default_lin_damping = 0.7;
+  constexpr double default_rot_damping = 0.7;
+
   auto_declare<double>("stiffness.trans_x", default_lin_stiff);
   auto_declare<double>("stiffness.trans_y", default_lin_stiff);
   auto_declare<double>("stiffness.trans_z", default_lin_stiff);
   auto_declare<double>("stiffness.rot_x", default_rot_stiff);
   auto_declare<double>("stiffness.rot_y", default_rot_stiff);
   auto_declare<double>("stiffness.rot_z", default_rot_stiff);
+
+  auto_declare<double>("damping.trans_x", default_lin_damping);
+  auto_declare<double>("damping.trans_y", default_lin_damping);
+  auto_declare<double>("damping.trans_z", default_lin_damping);
+  auto_declare<double>("damping.rot_x", default_rot_damping);
+  auto_declare<double>("damping.rot_y", default_rot_damping);
+  auto_declare<double>("damping.rot_z", default_rot_damping);
+
+  m_last_error.resize(10);
+  std::fill(m_last_error.begin(), m_last_error.end(), ctrl::Vector6D::Zero());
 
   return TYPE::SUCCESS;
 }
@@ -183,13 +197,46 @@ ctrl::Vector6D CartesianComplianceController::computeComplianceError()
 
   m_stiffness = tmp.asDiagonal();
 
+  // Get the damping
+  tmp[0] = get_node()->get_parameter("damping.trans_x").as_double();
+  tmp[1] = get_node()->get_parameter("damping.trans_y").as_double();
+  tmp[2] = get_node()->get_parameter("damping.trans_z").as_double();
+  tmp[3] = get_node()->get_parameter("damping.rot_x").as_double();
+  tmp[4] = get_node()->get_parameter("damping.rot_y").as_double();
+  tmp[5] = get_node()->get_parameter("damping.rot_z").as_double();
+
+  m_damping = tmp.asDiagonal();
+
+  ctrl::Vector6D current_motion_error = MotionBase::computeMotionError();
+
+  auto internal_period = rclcpp::Duration::from_seconds(0.02);
+  ctrl::Vector6D filterd_error = ctrl::Vector6D::Zero();
+  for (size_t i = 0; i < m_last_error.size(); i++)
+  {
+    filterd_error[0] += m_last_error[i][0];
+    filterd_error[1] += m_last_error[i][1];
+    filterd_error[2] += m_last_error[i][2];
+    filterd_error[3] += m_last_error[i][3];
+    filterd_error[4] += m_last_error[i][4];
+    filterd_error[5] += m_last_error[i][5]; 
+  }
+  filterd_error = filterd_error / m_last_error.size();
+
+  // print last_motion_error
+  
   ctrl::Vector6D net_force =
 
     // Spring force in base orientation
-    Base::displayInBaseLink(m_stiffness,m_compliance_ref_link) * MotionBase::computeMotionError()
+    // Base::displayInBaseLink(m_stiffness,m_compliance_ref_link) * current_motion_error
+    // + Base::displayInBaseLink(m_damping,m_compliance_ref_link) * ((current_motion_error - filterd_error)/ internal_period.seconds())
+    m_stiffness * current_motion_error
+    + m_damping * ((current_motion_error - filterd_error)/ internal_period.seconds())
 
     // Sensor and target force in base orientation
     + ForceBase::computeForceError();
+
+  m_last_error.erase(m_last_error.begin());
+  m_last_error.push_back(current_motion_error);
 
   return net_force;
 }
