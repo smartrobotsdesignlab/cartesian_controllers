@@ -471,6 +471,7 @@ void CartesianControllerBase::setJointCommandHandles(const trajectory_msgs::msg:
   
   m_simulated_joint_motion.positions = joint_cmd_handles.positions;
   m_simulated_joint_motion.velocities = joint_cmd_handles.velocities;
+  m_ik_solver->updateKinematics();
 }
 
 ctrl::Vector6D CartesianControllerBase::displayInBaseLink(const ctrl::Vector6D& vector, const std::string& from)
