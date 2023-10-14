@@ -204,7 +204,9 @@ controller_interface::return_type CartesianComplianceController::update()
     }else{
       for (size_t i = 0; i < m_joint_cmd.size(); i++)
       {
-        joint_cmd.positions.push_back(m_joint_start[i] + (m_joint_cmd[i] - m_joint_start[i]) * current_duration / m_joint_service_duration);
+        // interpolate joint command by sin function
+        joint_cmd.positions.push_back(m_joint_start[i] + (m_joint_cmd[i] - m_joint_start[i]) * (1 - cos(current_duration * M_PI / m_joint_service_duration)) / 2);
+
       }
     }
     Base::setJointCommandHandles(joint_cmd);    
