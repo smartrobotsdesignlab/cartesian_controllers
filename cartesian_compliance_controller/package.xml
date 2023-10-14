@@ -18,6 +18,7 @@
   <depend>cartesian_motion_controller</depend>
   <depend>cartesian_force_controller</depend>
   <depend>controller_interface</depend>
+  <depend>cartesian_controller_msgs</depend>
 
   <test_depend>ament_lint_common</test_depend>
 

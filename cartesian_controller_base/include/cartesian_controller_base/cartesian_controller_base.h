@@ -112,6 +112,13 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
     void writeJointControlCmds();
 
     /**
+     * @brief Get the current joint positions from the real hardware
+     * 
+     * @return The current joint positions
+     */
+    std::vector<double> getJointPositions();
+
+    /**
      * @brief Compute one control step using forward dynamics simulation
      *
      * Check \ref ForwardDynamicsSolver for details.
@@ -120,6 +127,12 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
      * @param period The period for this control cycle
      */
     void computeJointControlCmds(const ctrl::Vector6D& error, const rclcpp::Duration& period);
+
+    /**
+     * @brief Set the Joint Command Handles
+     * @param joint_cmd_handles The joint command position handles
+     */
+    void setJointCommandHandles(const trajectory_msgs::msg::JointTrajectoryPoint& joint_cmd_handles);
 
     /**
      * @brief Display the given vector in the given robot base link
@@ -186,6 +199,7 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
     std::string m_end_effector_link;
     std::string m_robot_base_link;
     int m_iterations;
+    size_t m_joint_size;
 
     std::vector<std::reference_wrapper<hardware_interface::LoanedStateInterface> >
       m_joint_state_pos_handles;

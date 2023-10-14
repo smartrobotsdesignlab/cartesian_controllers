@@ -1,0 +1,4 @@
+std_msgs/Float64MultiArray cmd
+float64 duration
+---
+bool success

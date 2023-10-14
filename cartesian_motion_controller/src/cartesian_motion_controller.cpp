@@ -228,6 +228,14 @@ void CartesianMotionController::targetFrameCallback(const geometry_msgs::msg::Po
         target->pose.position.z));
 }
 
+void CartesianMotionController::resetTargetFrame()
+{
+  // Reset simulation with real joint state
+  Base::m_ik_solver->updateKinematics();
+  m_current_frame = Base::m_ik_solver->getEndEffectorPose();
+  m_target_frame = m_current_frame;
+}
+
 } // namespace
 
 // Pluginlib

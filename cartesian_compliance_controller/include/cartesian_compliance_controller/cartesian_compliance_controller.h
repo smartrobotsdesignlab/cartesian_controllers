@@ -46,6 +46,8 @@
 #include <cartesian_motion_controller/cartesian_motion_controller.h>
 #include <controller_interface/controller_interface.hpp>
 
+#include <cartesian_controller_msgs/srv/joint_move.hpp>
+
 namespace cartesian_compliance_controller
 {
 
@@ -114,6 +116,18 @@ class CartesianComplianceController
     std::string           m_compliance_ref_link;
     std::vector<ctrl::Vector6D> m_last_error;
 
+    // For the joint command service
+    rclcpp::Service<cartesian_controller_msgs::srv::JointMove>::SharedPtr m_joint_cmd_service;
+    void jointCmdServiceCallback(
+        const std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Request> request,
+        std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Response> response);
+    std::vector<double>     m_joint_cmd;
+    std::vector<double>     m_joint_start;
+    double                  m_joint_service_duration;
+    rclcpp::Time            m_joint_service_start_time;
+    bool                    m_joint_cmd_service_active;
+
+    rclcpp::Clock m_clock;
 };
 
 }

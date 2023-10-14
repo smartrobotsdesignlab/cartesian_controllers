@@ -87,6 +87,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   m_last_error.resize(10);
   std::fill(m_last_error.begin(), m_last_error.end(), ctrl::Vector6D::Zero());
 
+  m_joint_cmd_service = get_node()->create_service<cartesian_controller_msgs::srv::JointMove>(
+      std::string(get_node()->get_name()) + "/target_joint", std::bind(&CartesianComplianceController::jointCmdServiceCallback, this,
+                              std::placeholders::_1, std::placeholders::_2));
+
   return TYPE::SUCCESS;
 }
 #elif defined CARTESIAN_CONTROLLERS_FOXY
@@ -127,6 +131,8 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   // Make sure sensor wrenches are interpreted correctly
   ForceBase::setFtSensorReferenceFrame(m_compliance_ref_link);
 
+  m_clock = rclcpp::Clock(RCL_STEADY_TIME);
+
   return TYPE::SUCCESS;
 }
 
@@ -164,19 +170,44 @@ controller_interface::return_type CartesianComplianceController::update()
   // Synchronize the internal model and the real robot
   Base::m_ik_solver->synchronizeJointPositions(Base::m_joint_state_pos_handles);
 
-  // Control the robot motion in such a way that the resulting net force
-  // vanishes. This internal control needs some simulation time steps.
-  for (int i = 0; i < Base::m_iterations; ++i)
+  if (!m_joint_cmd_service_active)
   {
-    // The internal 'simulation time' is deliberately independent of the outer
-    // control cycle.
-    auto internal_period = rclcpp::Duration::from_seconds(0.02);
+    // Control the robot motion in such a way that the resulting net force
+    // vanishes. This internal control needs some simulation time steps.
+    for (int i = 0; i < Base::m_iterations; ++i)
+    {
+      // The internal 'simulation time' is deliberately independent of the outer
+      // control cycle.
+      auto internal_period = rclcpp::Duration::from_seconds(0.02);
 
-    // Compute the net force
-    ctrl::Vector6D error = computeComplianceError();
+      // Compute the net force
+      ctrl::Vector6D error = computeComplianceError();
 
-    // Turn Cartesian error into joint motion
-    Base::computeJointControlCmds(error,internal_period);
+      // Turn Cartesian error into joint motion
+      Base::computeJointControlCmds(error,internal_period);
+    }
+  }
+  else
+  {
+    double current_duration = (m_clock.now() - m_joint_service_start_time).seconds();
+    trajectory_msgs::msg::JointTrajectoryPoint joint_cmd;
+    if (current_duration >= m_joint_service_duration)
+    {
+      m_joint_cmd_service_active = false;
+      MotionBase::resetTargetFrame();
+      RCLCPP_INFO(get_node()->get_logger(), "Joint command finished");
+
+      for (size_t i = 0; i < m_joint_cmd.size(); i++)
+      {
+        joint_cmd.positions.push_back(m_joint_cmd[i]);
+      }
+    }else{
+      for (size_t i = 0; i < m_joint_cmd.size(); i++)
+      {
+        joint_cmd.positions.push_back(m_joint_start[i] + (m_joint_cmd[i] - m_joint_start[i]) * current_duration / m_joint_service_duration);
+      }
+    }
+    Base::setJointCommandHandles(joint_cmd);    
   }
 
   // Write final commands to the hardware interface
@@ -239,6 +270,32 @@ ctrl::Vector6D CartesianComplianceController::computeComplianceError()
   m_last_error.push_back(current_motion_error);
 
   return net_force;
+}
+
+void CartesianComplianceController::jointCmdServiceCallback(
+        const std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Request> request,
+        std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Response> response)
+{
+  m_joint_cmd_service_active = true;
+  m_joint_cmd = request->cmd.data;
+  m_joint_service_duration = request->duration;
+  m_joint_service_start_time = m_clock.now();
+
+  if (m_joint_cmd.size() != Base::m_joint_size)
+  {
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                        "Joint command has wrong size. Expected " << Base::m_joint_size
+                                                                  << " but got " << m_joint_cmd.size());
+    response->success = false;
+    return;
+  }
+
+  // Store current joint positions
+  m_joint_start = MotionBase::getJointPositions();
+  response->success = true;
+
+  RCLCPP_INFO(get_node()->get_logger(), "Received joint command");
+  return;
 }
 
 } // namespace

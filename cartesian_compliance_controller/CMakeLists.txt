@@ -12,6 +12,7 @@ find_package(rclcpp REQUIRED)
 find_package(cartesian_controller_base REQUIRED)
 find_package(cartesian_motion_controller REQUIRED)
 find_package(cartesian_force_controller REQUIRED)
+find_package(cartesian_controller_msgs REQUIRED)
 
 # Convenience variable for dependencies
 set(THIS_PACKAGE_INCLUDE_DEPENDS
@@ -20,6 +21,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
         cartesian_motion_controller
         cartesian_force_controller
         Eigen3
+        cartesian_controller_msgs
 )
 
 ament_export_dependencies(

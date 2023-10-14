@@ -252,7 +252,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   m_iterations = get_node()->get_parameter("solver.iterations").as_int();
   RCLCPP_INFO(get_node()->get_logger(), "Using %d iterations for inverse kinematics", m_iterations);
   m_error_scale = get_node()->get_parameter("solver.error_scale").as_double();
-
+  m_joint_size = m_joint_names.size();
   // Initialize Cartesian pd controllers
   m_spatial_controller.init(get_node());
 
@@ -435,6 +435,16 @@ void CartesianControllerBase::writeJointControlCmds()
   }
 }
 
+std::vector<double> CartesianControllerBase::getJointPositions()
+{
+  std::vector<double> positions(m_joint_names.size());
+  for (size_t i = 0; i < m_joint_names.size(); ++i)
+  {
+    positions[i] = m_joint_state_pos_handles[i].get().get_value();
+  }
+  return positions;
+}
+
 void CartesianControllerBase::computeJointControlCmds(const ctrl::Vector6D& error, const rclcpp::Duration& period)
 {
   // PD controlled system input
@@ -447,6 +457,20 @@ void CartesianControllerBase::computeJointControlCmds(const ctrl::Vector6D& erro
       m_cartesian_input);
 
   m_ik_solver->updateKinematics();
+}
+
+void CartesianControllerBase::setJointCommandHandles(const trajectory_msgs::msg::JointTrajectoryPoint& joint_cmd_handles)
+{
+  if (joint_cmd_handles.positions.size() != m_joint_names.size())
+  {
+    RCLCPP_ERROR(get_node()->get_logger(),
+                 "Received command with wrong size. Expected %zu, got %zu.",
+                 m_joint_names.size(),
+                 joint_cmd_handles.positions.size());
+  }
+  
+  m_simulated_joint_motion.positions = joint_cmd_handles.positions;
+  m_simulated_joint_motion.velocities = joint_cmd_handles.velocities;
 }
 
 ctrl::Vector6D CartesianControllerBase::displayInBaseLink(const ctrl::Vector6D& vector, const std::string& from)
