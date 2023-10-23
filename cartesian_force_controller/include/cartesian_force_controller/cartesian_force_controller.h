@@ -116,6 +116,8 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
 
     rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr m_target_wrench_subscriber;
     rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr m_ft_sensor_wrench_subscriber;
+    realtime_tools::RealtimePublisherSharedPtr<geometry_msgs::msg::WrenchStamped>
+      m_feedback_force_publisher;
     ctrl::Vector6D        m_target_wrench;
     ctrl::Vector6D        m_ft_sensor_wrench;
     std::string           m_ft_sensor_ref_link;

@@ -114,6 +114,12 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
       10,
       std::bind(&CartesianForceController::ftSensorWrenchCallback, this, std::placeholders::_1));
 
+  // Controller-internal state publishing
+  m_feedback_force_publisher =
+    std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::WrenchStamped> >(
+      get_node()->create_publisher<geometry_msgs::msg::WrenchStamped>(
+        std::string(get_node()->get_name()) + "/current_wrench", 3));
+
   m_target_wrench.setZero();
   m_ft_sensor_wrench.setZero();
 
@@ -272,6 +278,21 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   m_ft_sensor_wrench[3] = alpha * tmp[3] + (1 - alpha) * m_ft_sensor_wrench[3];
   m_ft_sensor_wrench[4] = alpha * tmp[4] + (1 - alpha) * m_ft_sensor_wrench[4];
   m_ft_sensor_wrench[5] = alpha * tmp[5] + (1 - alpha) * m_ft_sensor_wrench[5];
+
+  // Publish the current wrench
+  auto current_wrench = Base::displayInBaseLink(m_ft_sensor_wrench,Base::m_end_effector_link);
+  if (m_feedback_force_publisher->trylock()){
+    m_feedback_force_publisher->msg_.header.stamp = get_node()->now();
+    m_feedback_force_publisher->msg_.header.frame_id = m_robot_base_link;
+    m_feedback_force_publisher->msg_.wrench.force.x = current_wrench[0];
+    m_feedback_force_publisher->msg_.wrench.force.y = current_wrench[1];
+    m_feedback_force_publisher->msg_.wrench.force.z = current_wrench[2];
+    m_feedback_force_publisher->msg_.wrench.torque.x = current_wrench[3];
+    m_feedback_force_publisher->msg_.wrench.torque.y = current_wrench[4];
+    m_feedback_force_publisher->msg_.wrench.torque.z = current_wrench[5];
+
+    m_feedback_force_publisher->unlockAndPublish();
+  }
 
 
 #elif defined CARTESIAN_CONTROLLERS_FOXY
