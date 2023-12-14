@@ -251,7 +251,8 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   }
 
 
-#if defined CARTESIAN_CONTROLLERS_GALACTIC || defined CARTESIAN_CONTROLLERS_HUMBLE
+// #if defined CARTESIAN_CONTROLLERS_GALACTIC || defined CARTESIAN_CONTROLLERS_HUMBLE
+
   KDL::Wrench tmp;
   tmp[0] = wrench->wrench.force.x;
   tmp[1] = wrench->wrench.force.y;
@@ -263,6 +264,21 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   // Compute how the measured wrench appears in the frame of interest.
   tmp = m_ft_sensor_transform * tmp;
 
+  ctrl::Vector6D tmp_vec;
+  tmp_vec(0) = tmp[0];
+  tmp_vec(1) = tmp[1];
+  tmp_vec(2) = tmp[2];
+  tmp_vec(3) = tmp[3];
+  tmp_vec(4) = tmp[4];
+  tmp_vec(5) = tmp[5];
+
+  // Normalize the force part of the wrench to the mass of the end-effector
+  double normalized_force = tmp_vec.head(3).norm();
+  if (!m_emergency_stop && normalized_force > m_emergency_stop_threshold){
+    m_emergency_stop = true;
+    RCLCPP_ERROR_STREAM(get_node()->get_logger(),
+                        "Emergency stop triggered. Please restart robot. Force norm: " << normalized_force);
+  }
   // m_ft_sensor_wrench[0] = tmp[0];
   // m_ft_sensor_wrench[1] = tmp[1];
   // m_ft_sensor_wrench[2] = tmp[2];
@@ -295,16 +311,16 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   }
 
 
-#elif defined CARTESIAN_CONTROLLERS_FOXY
-  // We assume base frame for the measurements
-  // This is currently URe-ROS2 driver-specific (branch foxy).
-  m_ft_sensor_wrench[0] = wrench->wrench.force.x;
-  m_ft_sensor_wrench[1] = wrench->wrench.force.y;
-  m_ft_sensor_wrench[2] = wrench->wrench.force.z;
-  m_ft_sensor_wrench[3] = wrench->wrench.torque.x;
-  m_ft_sensor_wrench[4] = wrench->wrench.torque.y;
-  m_ft_sensor_wrench[5] = wrench->wrench.torque.z;
-#endif
+// #elif defined CARTESIAN_CONTROLLERS_FOXY
+//   // We assume base frame for the measurements
+//   // This is currently URe-ROS2 driver-specific (branch foxy).
+//   m_ft_sensor_wrench[0] = wrench->wrench.force.x;
+//   m_ft_sensor_wrench[1] = wrench->wrench.force.y;
+//   m_ft_sensor_wrench[2] = wrench->wrench.force.z;
+//   m_ft_sensor_wrench[3] = wrench->wrench.torque.x;
+//   m_ft_sensor_wrench[4] = wrench->wrench.torque.y;
+//   m_ft_sensor_wrench[5] = wrench->wrench.torque.z;
+// #endif
 }
 
 }

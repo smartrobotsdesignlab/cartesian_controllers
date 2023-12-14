@@ -99,6 +99,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
     auto_declare<double>("solver.error_scale", 1.0);
     auto_declare<int>("solver.iterations", 1);
     auto_declare<bool>("solver.publish_state_feedback", false);
+    auto_declare<double>("emergency_stop_threshold", 10.0);
     m_initialized = true;
   }
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -125,7 +126,7 @@ controller_interface::return_type CartesianControllerBase::init(const std::strin
     auto_declare<double>("solver.error_scale", 1.0);
     auto_declare<int>("solver.iterations", 1);
     auto_declare<bool>("solver.publish_state_feedback", false);
-
+    auto_declare<double>("emergency_stop_threshold", 10.0);
     m_initialized = true;
   }
   return controller_interface::return_type::OK;
@@ -276,6 +277,9 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
     }
   }
 
+  // Get Emergency Stop Threshold
+  m_emergency_stop_threshold = get_node()->get_parameter("emergency_stop_threshold").as_double();
+
   // Controller-internal state publishing
   m_feedback_pose_publisher =
     std::make_shared<realtime_tools::RealtimePublisher<geometry_msgs::msg::PoseStamped> >(
@@ -414,6 +418,19 @@ void CartesianControllerBase::writeJointControlCmds()
 #endif
     return;
   }
+
+  // Checking the emergency stop
+  if (checkEmergencyStop())
+  {
+    RCLCPP_ERROR(get_node()->get_logger(), "Emergency stop detected. Shutting down.");
+#if defined CARTESIAN_CONTROLLERS_HUMBLE
+      get_node()->shutdown();
+#elif defined CARTESIAN_CONTROLLERS_FOXY || defined CARTESIAN_CONTROLLERS_GALACTIC
+      this->shutdown();
+#endif
+    return;
+  }
+
 
   // Write all available types.
   for (const auto& type : m_cmd_interface_types)
@@ -597,6 +614,11 @@ void CartesianControllerBase::publishStateFeedback()
     m_feedback_twist_publisher->unlockAndPublish();
   }
 
+}
+
+bool CartesianControllerBase::checkEmergencyStop()
+{
+  return m_emergency_stop;
 }
 
 

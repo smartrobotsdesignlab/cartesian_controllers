@@ -185,6 +185,13 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
       return false;
     }
 
+    /**
+     * @brief Check if trigger the emergency stop
+     *
+     * @return True if triggered, false otherwise
+     */
+    bool checkEmergencyStop();
+
     KDL::Chain m_robot_chain;
 
     std::shared_ptr<KDL::TreeFkSolverPos_recursive> m_forward_kinematics_solver;
@@ -203,6 +210,10 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
 
     std::vector<std::reference_wrapper<hardware_interface::LoanedStateInterface> >
       m_joint_state_pos_handles;
+    
+    // system state
+    bool m_emergency_stop = {false};
+    double m_emergency_stop_threshold = {10.0}; // [m/s^2]
 
   private:
 

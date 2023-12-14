@@ -214,6 +214,7 @@ controller_interface::return_type CartesianComplianceController::update()
 
   // Write final commands to the hardware interface
   Base::writeJointControlCmds();
+  return controller_interface::return_type::ERROR;
 
   return controller_interface::return_type::OK;
 }
