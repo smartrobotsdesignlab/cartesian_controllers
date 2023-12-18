@@ -161,8 +161,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
 
   // Get the robot description from the parameter server
   // Create a temp Node for getting the robot_description
+  // Print current namespace
+  std::string node_namespace = get_node()->get_namespace();
   rclcpp::Node::SharedPtr temp_node = std::make_shared<rclcpp::Node>("temp_node");
-  m_urdf_param_client = std::make_shared<rclcpp::SyncParametersClient>(temp_node, "/robot_state_publisher");
+  m_urdf_param_client = std::make_shared<rclcpp::SyncParametersClient>(temp_node, (node_namespace + std::string("/robot_state_publisher")).c_str());
   RCLCPP_INFO(get_node()->get_logger(), "Waiting for global parameter server...");
   using namespace std::chrono_literals;
   bool success = m_urdf_param_client->wait_for_service(5s);
