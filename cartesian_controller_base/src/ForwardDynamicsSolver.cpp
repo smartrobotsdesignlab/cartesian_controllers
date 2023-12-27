@@ -95,9 +95,10 @@ namespace cartesian_controller_base{
     m_current_accelerations.data = m_jnt_space_inertia.data.inverse() * m_jnt_jacobian.data.transpose() * net_force;
 
     // Numerical time integration with the Euler forward method
-    m_current_positions.data = m_last_positions.data + m_last_velocities.data * period.seconds();
-    m_current_velocities.data = m_last_velocities.data + m_current_accelerations.data * period.seconds();
-    m_current_velocities.data *= 0.9;  // 10 % global damping against unwanted null space motion.
+    KDL::JntArray target_positions, target_velocities;
+    target_positions.data = m_last_positions.data + m_last_velocities.data * period.seconds();
+    target_velocities.data = m_last_velocities.data + m_current_accelerations.data * period.seconds();
+    target_velocities.data *= 0.9;  // 10 % global damping against unwanted null space motion.
                                        // Will cause exponential slow-down without input.
     // Make sure positions stay in allowed margins
     applyJointLimits();
@@ -106,8 +107,8 @@ namespace cartesian_controller_base{
     trajectory_msgs::msg::JointTrajectoryPoint control_cmd;
     for (int i = 0; i < m_number_joints; ++i)
     {
-      control_cmd.positions.push_back(m_current_positions(i));
-      control_cmd.velocities.push_back(m_current_velocities(i));
+      control_cmd.positions.push_back(target_positions(i));
+      control_cmd.velocities.push_back(target_velocities(i));
 
       // Accelerations should be left empty. Those values will be interpreted
       // by most hardware joint drivers as max. tolerated values. As a
@@ -116,8 +117,8 @@ namespace cartesian_controller_base{
     control_cmd.time_from_start = period; // valid for this duration
 
     // Update for the next cycle
-    m_last_positions = m_current_positions;
-    m_last_velocities = m_current_velocities;
+    m_last_positions = target_positions;
+    m_last_velocities = target_velocities;
 
     return control_cmd;
   }
