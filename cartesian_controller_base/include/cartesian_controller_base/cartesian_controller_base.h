@@ -213,8 +213,11 @@ class CartesianControllerBase : public controller_interface::ControllerInterface
     
     // system state
     bool m_emergency_stop = {false};
+    bool m_compute_initialized = {false};
     double m_emergency_stop_threshold = {10.0}; // [m/s^2]
 
+    rclcpp::Clock m_clock;
+    
   private:
 
     /**

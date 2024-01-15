@@ -61,6 +61,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
 
   auto_declare<std::string>("ft_sensor_ref_link", "");
   auto_declare<bool>("hand_frame_control", true);
+  auto_declare<bool>("gravity_compensation", true);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;;
 }
@@ -75,6 +76,7 @@ controller_interface::return_type CartesianForceController::init(const std::stri
 
   auto_declare<std::string>("ft_sensor_ref_link", "");
   auto_declare<bool>("hand_frame_control", true);
+  auto_declare<bool>("gravity_compensation", true);
 
   return controller_interface::return_type::OK;
 }
@@ -182,11 +184,7 @@ ctrl::Vector6D CartesianForceController::computeForceError()
   }
 
   // Superimpose target wrench and sensor wrench in base frame
-#if defined CARTESIAN_CONTROLLERS_GALACTIC || defined CARTESIAN_CONTROLLERS_HUMBLE
-  return Base::displayInBaseLink(m_ft_sensor_wrench,m_new_ft_sensor_ref) + target_wrench;
-#elif defined CARTESIAN_CONTROLLERS_FOXY
   return m_ft_sensor_wrench + target_wrench;
-#endif
 }
 
 void CartesianForceController::setFtSensorReferenceFrame(const std::string& new_ref)
@@ -264,63 +262,116 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   // Compute how the measured wrench appears in the frame of interest.
   tmp = m_ft_sensor_transform * tmp;
 
-  ctrl::Vector6D tmp_vec;
-  tmp_vec(0) = tmp[0];
-  tmp_vec(1) = tmp[1];
-  tmp_vec(2) = tmp[2];
-  tmp_vec(3) = tmp[3];
-  tmp_vec(4) = tmp[4];
-  tmp_vec(5) = tmp[5];
+  // Low pass fileter
+  double alpha = 0.5;
+  m_ft_sensor_wrench_raw[0] = alpha * tmp[0] + (1 - alpha) * m_ft_sensor_wrench_raw[0];
+  m_ft_sensor_wrench_raw[1] = alpha * tmp[1] + (1 - alpha) * m_ft_sensor_wrench_raw[1];
+  m_ft_sensor_wrench_raw[2] = alpha * tmp[2] + (1 - alpha) * m_ft_sensor_wrench_raw[2];
+  m_ft_sensor_wrench_raw[3] = alpha * tmp[3] + (1 - alpha) * m_ft_sensor_wrench_raw[3];
+  m_ft_sensor_wrench_raw[4] = alpha * tmp[4] + (1 - alpha) * m_ft_sensor_wrench_raw[4];
+  m_ft_sensor_wrench_raw[5] = alpha * tmp[5] + (1 - alpha) * m_ft_sensor_wrench_raw[5];
+}
+
+void CartesianForceController::gravityCompensation(void)
+{
+  if(!Base::m_compute_initialized)
+  {
+    RCLCPP_WARN_STREAM(get_node()->get_logger(),
+                        "Cannot compute ft sensor wrench. Controller is not initialized.");
+    return;
+  }
+  
+  // Display ft sensor to robot base frame
+  ctrl::Vector6D ft_sensor_wrench = Base::displayInBaseLink(m_ft_sensor_wrench_raw,m_new_ft_sensor_ref);
+
+  m_gravity_compensation = get_node()->get_parameter("gravity_compensation").as_bool();
+  if (m_gravity_compensation)
+  {
+    ctrl::Vector6D gravity_comp = ctrl::Vector6D::Zero();
+    // std::cout << "gravity compensation is on" << gravity_comp << std::endl;
+
+    // Force compenstation
+    Eigen::Matrix<double, 4, 1> force_gravity;
+    force_gravity << -10.9869, -1.6, -0.92, -7.78;
+    // std::cout << "force_gravity is: " << force_gravity << std::endl;
+
+    auto kdl2Eigen = [](const KDL::Frame frame) -> Eigen::Matrix3d {
+      Eigen::Matrix3d eigen_rot;
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            eigen_rot(i, j) = frame.M(i, j);
+        }
+      }
+      return eigen_rot;
+    };
+
+    KDL::Frame transform_kdl;
+    m_forward_kinematics_solver->JntToCart(
+      m_ik_solver->getPositions(),
+      transform_kdl,
+      m_new_ft_sensor_ref);
+    Eigen::Matrix3d eigen_rot =  kdl2Eigen(transform_kdl);
+    // std::cout << "eigen_rot is: \r\n" << eigen_rot << std::endl;
+
+    Eigen::Matrix<double,3,4> A_comp = Eigen::Matrix<double,3,4>::Zero();
+    A_comp(2,0) = 1;
+    // std::cout << "top left corner is: \r\n" << A_comp.bottomRightCorner(3,3) << std::endl;
+    A_comp.bottomRightCorner(3,3) = eigen_rot;
+    // std::cout << "A_comp is: \r\n" << A_comp << std::endl;
+    Eigen::Vector3d force_comp = A_comp * force_gravity;
+    // std::cout << "force_comp is: \r\n" << force_comp << std::endl;
+
+    // Torque compensation
+    Eigen::Matrix<double, 4, 1> torque_gravity;
+    torque_gravity << 0.0531, -0.0041, -0.0109, 0.0361;
+    // std::cout << "torque_gravity is: \r\n" << torque_gravity << std::endl;
+    Eigen::Matrix3d cross_prod;
+    cross_prod << 0., 1., 0., -1., 0., 0., 0., 0., 0.;
+    // std::cout << "cross_prod is: \r\n" << cross_prod << std::endl;
+    Eigen::Matrix3d torque_rots = Eigen::Matrix3d::Zero();
+    torque_rots.col(2) = eigen_rot.col(2);
+    // std::cout << "torque_rots is: \r\n" << torque_rots << std::endl;
+    Eigen::Matrix3d At_comp_part = force_gravity[0] * cross_prod * torque_rots;
+    // std::cout << "At_comp_part is: \r\n" << At_comp_part << std::endl;
+    Eigen::Matrix<double, 3, 4> At_comp = Eigen::Matrix<double, 3,4>::Zero();
+    At_comp.col(0) = At_comp_part.col(2);
+    // std::cout << "At_comp is: \r\n" << At_comp << std::endl;
+    At_comp.bottomRightCorner(3,3) = eigen_rot;
+    // std::cout << "At_comp is: \r\n" << At_comp << std::endl;
+    Eigen::Vector3d torque_comp = At_comp * torque_gravity;
+    // std::cout << "torque_comp is: \r\n" << torque_comp << std::endl;
+    
+    gravity_comp << force_comp , torque_comp;
+    // std::cout << "gravity compensation is: \r\n" << gravity_comp << std::endl;
+
+    m_ft_sensor_wrench = ft_sensor_wrench - gravity_comp;
+  }
+  else
+  {
+    m_ft_sensor_wrench = ft_sensor_wrench;
+  }
+
+  // Publish current wrench
+  if (m_feedback_force_publisher->trylock() && !m_emergency_stop){
+    m_feedback_force_publisher->msg_.header.stamp = Base::m_clock.now();
+    m_feedback_force_publisher->msg_.header.frame_id = m_robot_base_link;
+    m_feedback_force_publisher->msg_.wrench.force.x = m_ft_sensor_wrench[0];
+    m_feedback_force_publisher->msg_.wrench.force.y = m_ft_sensor_wrench[1];
+    m_feedback_force_publisher->msg_.wrench.force.z = m_ft_sensor_wrench[2];
+    m_feedback_force_publisher->msg_.wrench.torque.x = m_ft_sensor_wrench[3];
+    m_feedback_force_publisher->msg_.wrench.torque.y = m_ft_sensor_wrench[4];
+    m_feedback_force_publisher->msg_.wrench.torque.z = m_ft_sensor_wrench[5];
+
+    m_feedback_force_publisher->unlockAndPublish();
+  }
 
   // Normalize the force part of the wrench to the mass of the end-effector
-  double normalized_force = tmp_vec.head(3).norm();
+  double normalized_force = m_ft_sensor_wrench.head(3).norm();
   if (!m_emergency_stop && normalized_force > m_emergency_stop_threshold){
     m_emergency_stop = true;
     RCLCPP_ERROR_STREAM(get_node()->get_logger(),
                         "Emergency stop triggered. Please restart robot. Force norm: " << normalized_force);
   }
-  // m_ft_sensor_wrench[0] = tmp[0];
-  // m_ft_sensor_wrench[1] = tmp[1];
-  // m_ft_sensor_wrench[2] = tmp[2];
-  // m_ft_sensor_wrench[3] = tmp[3];
-  // m_ft_sensor_wrench[4] = tmp[4];
-  // m_ft_sensor_wrench[5] = tmp[5];
-
-  // Low pass fileter
-  double alpha = 0.5;
-  m_ft_sensor_wrench[0] = alpha * tmp[0] + (1 - alpha) * m_ft_sensor_wrench[0];
-  m_ft_sensor_wrench[1] = alpha * tmp[1] + (1 - alpha) * m_ft_sensor_wrench[1];
-  m_ft_sensor_wrench[2] = alpha * tmp[2] + (1 - alpha) * m_ft_sensor_wrench[2];
-  m_ft_sensor_wrench[3] = alpha * tmp[3] + (1 - alpha) * m_ft_sensor_wrench[3];
-  m_ft_sensor_wrench[4] = alpha * tmp[4] + (1 - alpha) * m_ft_sensor_wrench[4];
-  m_ft_sensor_wrench[5] = alpha * tmp[5] + (1 - alpha) * m_ft_sensor_wrench[5];
-
-  // Publish the current wrench
-  auto current_wrench = Base::displayInBaseLink(m_ft_sensor_wrench,Base::m_end_effector_link);
-  if (m_feedback_force_publisher->trylock()){
-    m_feedback_force_publisher->msg_.header.stamp = get_node()->now();
-    m_feedback_force_publisher->msg_.header.frame_id = m_robot_base_link;
-    m_feedback_force_publisher->msg_.wrench.force.x = current_wrench[0];
-    m_feedback_force_publisher->msg_.wrench.force.y = current_wrench[1];
-    m_feedback_force_publisher->msg_.wrench.force.z = current_wrench[2];
-    m_feedback_force_publisher->msg_.wrench.torque.x = current_wrench[3];
-    m_feedback_force_publisher->msg_.wrench.torque.y = current_wrench[4];
-    m_feedback_force_publisher->msg_.wrench.torque.z = current_wrench[5];
-
-    m_feedback_force_publisher->unlockAndPublish();
-  }
-
-
-// #elif defined CARTESIAN_CONTROLLERS_FOXY
-//   // We assume base frame for the measurements
-//   // This is currently URe-ROS2 driver-specific (branch foxy).
-//   m_ft_sensor_wrench[0] = wrench->wrench.force.x;
-//   m_ft_sensor_wrench[1] = wrench->wrench.force.y;
-//   m_ft_sensor_wrench[2] = wrench->wrench.force.z;
-//   m_ft_sensor_wrench[3] = wrench->wrench.torque.x;
-//   m_ft_sensor_wrench[4] = wrench->wrench.torque.y;
-//   m_ft_sensor_wrench[5] = wrench->wrench.torque.z;
-// #endif
 }
 
 }

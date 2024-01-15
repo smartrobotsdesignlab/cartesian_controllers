@@ -84,6 +84,8 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   auto_declare<double>("damping.rot_y", default_rot_damping);
   auto_declare<double>("damping.rot_z", default_rot_damping);
 
+  auto_declare<bool>("force_enable", true);
+
   m_last_error.resize(10);
   std::fill(m_last_error.begin(), m_last_error.end(), ctrl::Vector6D::Zero());
 
@@ -131,8 +133,6 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   // Make sure sensor wrenches are interpreted correctly
   ForceBase::setFtSensorReferenceFrame(m_compliance_ref_link);
 
-  m_clock = rclcpp::Clock(RCL_STEADY_TIME);
-
   return TYPE::SUCCESS;
 }
 
@@ -169,6 +169,8 @@ controller_interface::return_type CartesianComplianceController::update()
 {
   // Synchronize the internal model and the real robot
   Base::m_ik_solver->synchronizeJointPositions(Base::m_joint_state_pos_handles);
+  Base::m_ik_solver->updateKinematics();
+  ForceBase::gravityCompensation();
 
   if (!m_joint_cmd_service_active)
   {
@@ -189,7 +191,7 @@ controller_interface::return_type CartesianComplianceController::update()
   }
   else
   {
-    double current_duration = (m_clock.now() - m_joint_service_start_time).seconds();
+    double current_duration = (Base::m_clock.now() - m_joint_service_start_time).seconds();
     trajectory_msgs::msg::JointTrajectoryPoint joint_cmd;
     if (current_duration >= m_joint_service_duration)
     {
@@ -257,6 +259,9 @@ ctrl::Vector6D CartesianComplianceController::computeComplianceError()
   filterd_error = filterd_error / m_last_error.size();
 
   // print last_motion_error
+
+  // Get force enable
+  bool force_enable = get_node()->get_parameter("force_enable").as_bool();
   
   ctrl::Vector6D net_force =
 
@@ -267,7 +272,7 @@ ctrl::Vector6D CartesianComplianceController::computeComplianceError()
     + m_damping * ((current_motion_error - filterd_error)/ internal_period.seconds())
 
     // Sensor and target force in base orientation
-    + ForceBase::computeForceError();
+    + ForceBase::computeForceError() * (force_enable? 1. : 0.);
 
   m_last_error.erase(m_last_error.begin());
   m_last_error.push_back(current_motion_error);
@@ -282,7 +287,7 @@ void CartesianComplianceController::jointCmdServiceCallback(
   m_joint_cmd_service_active = true;
   m_joint_cmd = request->cmd.data;
   m_joint_service_duration = request->duration;
-  m_joint_service_start_time = m_clock.now();
+  m_joint_service_start_time = Base::m_clock.now();
 
   if (m_joint_cmd.size() != Base::m_joint_size)
   {

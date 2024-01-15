@@ -292,6 +292,8 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
       get_node()->create_publisher<geometry_msgs::msg::TwistStamped>(
         std::string(get_node()->get_name()) + "/current_twist", 3));
 
+  m_clock = rclcpp::Clock(RCL_STEADY_TIME);
+
   m_configured = true;
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
@@ -425,8 +427,10 @@ void CartesianControllerBase::writeJointControlCmds()
   {
     RCLCPP_ERROR(get_node()->get_logger(), "Emergency stop detected. Shutting down.");
 #if defined CARTESIAN_CONTROLLERS_HUMBLE
+      this->on_shutdown(rclcpp_lifecycle::State());
       get_node()->shutdown();
 #elif defined CARTESIAN_CONTROLLERS_FOXY || defined CARTESIAN_CONTROLLERS_GALACTIC
+      this->on_shutdown(rclcpp_lifecycle::State());
       this->shutdown();
 #endif
     return;
@@ -475,6 +479,9 @@ void CartesianControllerBase::computeJointControlCmds(const ctrl::Vector6D& erro
       m_cartesian_input);
 
   m_ik_solver->updateKinematics();
+  if (!m_compute_initialized){
+    m_compute_initialized = true;
+  }
 }
 
 void CartesianControllerBase::setJointCommandHandles(const trajectory_msgs::msg::JointTrajectoryPoint& joint_cmd_handles)

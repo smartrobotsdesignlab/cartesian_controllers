@@ -107,6 +107,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
     ctrl::Vector6D        computeForceError();
     std::string           m_new_ft_sensor_ref;
     void setFtSensorReferenceFrame(const std::string& new_ref);
+    void gravityCompensation(void);
 
   private:
     ctrl::Vector6D        compensateGravity();
@@ -120,6 +121,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
       m_feedback_force_publisher;
     ctrl::Vector6D        m_target_wrench;
     ctrl::Vector6D        m_ft_sensor_wrench;
+    ctrl::Vector6D        m_ft_sensor_wrench_raw;
     std::string           m_ft_sensor_ref_link;
     KDL::Frame            m_ft_sensor_transform;
 
@@ -130,6 +132,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
      * intuitive for tele-manipulation.
      */
     bool m_hand_frame_control;
+    bool m_gravity_compensation;
 
 };
 

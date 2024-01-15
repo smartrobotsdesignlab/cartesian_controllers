@@ -126,8 +126,6 @@ class CartesianComplianceController
     double                  m_joint_service_duration;
     rclcpp::Time            m_joint_service_start_time;
     bool                    m_joint_cmd_service_active;
-
-    rclcpp::Clock m_clock;
 };
 
 }
