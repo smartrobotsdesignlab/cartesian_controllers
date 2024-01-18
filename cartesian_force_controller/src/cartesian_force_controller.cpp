@@ -60,8 +60,8 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
   }
 
   auto_declare<std::string>("ft_sensor_ref_link", "");
-  auto_declare<bool>("hand_frame_control", true);
-  auto_declare<bool>("gravity_compensation", true);
+  auto_declare<bool>("hand_frame_control", false);
+  auto_declare<bool>("gravity_compensation", false);
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;;
 }
@@ -75,8 +75,8 @@ controller_interface::return_type CartesianForceController::init(const std::stri
   }
 
   auto_declare<std::string>("ft_sensor_ref_link", "");
-  auto_declare<bool>("hand_frame_control", true);
-  auto_declare<bool>("gravity_compensation", true);
+  auto_declare<bool>("hand_frame_control", false);
+  auto_declare<bool>("gravity_compensation", false);
 
   return controller_interface::return_type::OK;
 }
@@ -124,6 +124,7 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
 
   m_target_wrench.setZero();
   m_ft_sensor_wrench.setZero();
+  m_ft_sensor_wrench_raw.setZero();
 
   return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::SUCCESS;
 }
