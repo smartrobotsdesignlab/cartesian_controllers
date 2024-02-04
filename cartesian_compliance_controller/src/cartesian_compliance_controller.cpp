@@ -93,6 +93,9 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
       std::string(get_node()->get_name()) + "/target_joint", std::bind(&CartesianComplianceController::jointCmdServiceCallback, this,
                               std::placeholders::_1, std::placeholders::_2));
 
+  m_feedback_target_pose_publisher = get_node()->create_publisher<geometry_msgs::msg::PoseStamped>(
+      std::string(get_node()->get_name()) + "/target_frame_monitor", 1);
+
   return TYPE::SUCCESS;
 }
 #elif defined CARTESIAN_CONTROLLERS_FOXY
@@ -170,6 +173,7 @@ controller_interface::return_type CartesianComplianceController::update()
   // Synchronize the internal model and the real robot
   Base::m_ik_solver->synchronizeJointPositions(Base::m_joint_state_pos_handles);
   Base::m_ik_solver->updateKinematics();
+  m_feedback_target_pose_publisher->publish(MotionBase::getTragetFrame());
   ForceBase::gravityCompensation();
 
   if (!m_joint_cmd_service_active)

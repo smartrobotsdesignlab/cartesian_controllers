@@ -116,6 +116,7 @@ class CartesianComplianceController
     std::string           m_compliance_ref_link;
     std::vector<ctrl::Vector6D> m_last_error;
 
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_feedback_target_pose_publisher;
     // For the joint command service
     rclcpp::Service<cartesian_controller_msgs::srv::JointMove>::SharedPtr m_joint_cmd_service;
     void jointCmdServiceCallback(

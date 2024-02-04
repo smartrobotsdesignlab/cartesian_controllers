@@ -228,6 +228,22 @@ void CartesianMotionController::targetFrameCallback(const geometry_msgs::msg::Po
         target->pose.position.z));
 }
 
+geometry_msgs::msg::PoseStamped CartesianMotionController::getTragetFrame()
+{
+  geometry_msgs::msg::PoseStamped target;
+  target.header.frame_id = Base::m_robot_base_link;
+  target.header.stamp = get_node()->get_clock()->now();
+  target.pose.position.x = m_target_frame.p.x();
+  target.pose.position.y = m_target_frame.p.y();
+  target.pose.position.z = m_target_frame.p.z();
+  m_target_frame.M.GetQuaternion(
+      target.pose.orientation.x,
+      target.pose.orientation.y,
+      target.pose.orientation.z,
+      target.pose.orientation.w);
+  return target;
+}
+
 void CartesianMotionController::resetTargetFrame()
 {
   // Reset simulation with real joint state

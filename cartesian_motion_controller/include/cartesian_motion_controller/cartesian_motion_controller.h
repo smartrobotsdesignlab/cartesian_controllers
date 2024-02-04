@@ -116,6 +116,7 @@ class CartesianMotionController : public virtual cartesian_controller_base::Cart
     KDL::Frame      m_current_frame;
 
     void targetFrameCallback(const geometry_msgs::msg::PoseStamped::SharedPtr target);
+    geometry_msgs::msg::PoseStamped getTragetFrame();
     void resetTargetFrame();
 
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr m_target_frame_subscr;
