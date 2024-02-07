@@ -109,6 +109,9 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
     void setFtSensorReferenceFrame(const std::string& new_ref);
     void gravityCompensation(void);
 
+    // KDL frame to Eigen Rotation Matrix
+    Eigen::Matrix3d kdl2Eigen(const KDL::Frame& kdl_frame);
+
   private:
     ctrl::Vector6D        compensateGravity();
 
@@ -124,6 +127,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
     ctrl::Vector6D        m_ft_sensor_wrench_raw;
     std::string           m_ft_sensor_ref_link;
     KDL::Frame            m_ft_sensor_transform;
+    Eigen::Matrix3d       m_ft_sensor_rotation_eigen;
 
     /**
      * Allow users to choose whether to specify their target wrenches in the

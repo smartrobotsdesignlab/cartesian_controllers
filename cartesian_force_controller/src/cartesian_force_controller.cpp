@@ -211,6 +211,7 @@ void CartesianForceController::setFtSensorReferenceFrame(const std::string& new_
       m_new_ft_sensor_ref);
 
   m_ft_sensor_transform = new_sensor_ref.Inverse() * sensor_ref;
+  m_ft_sensor_rotation_eigen = kdl2Eigen(m_ft_sensor_transform);
 }
 
 void CartesianForceController::targetWrenchCallback(const geometry_msgs::msg::WrenchStamped::SharedPtr wrench)
@@ -252,25 +253,25 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
 
 // #if defined CARTESIAN_CONTROLLERS_GALACTIC || defined CARTESIAN_CONTROLLERS_HUMBLE
 
-  KDL::Wrench tmp;
-  tmp[0] = wrench->wrench.force.x;
-  tmp[1] = wrench->wrench.force.y;
-  tmp[2] = wrench->wrench.force.z;
-  tmp[3] = wrench->wrench.torque.x;
-  tmp[4] = wrench->wrench.torque.y;
-  tmp[5] = wrench->wrench.torque.z;
+  ctrl::Vector6D force_tmp;
+  force_tmp[0] = wrench->wrench.force.x;
+  force_tmp[1] = wrench->wrench.force.y;
+  force_tmp[2] = wrench->wrench.force.z;
+  force_tmp[3] = wrench->wrench.torque.x;
+  force_tmp[4] = wrench->wrench.torque.y;
+  force_tmp[5] = wrench->wrench.torque.z;
 
-  // Compute how the measured wrench appears in the frame of interest.
-  tmp = m_ft_sensor_transform * tmp;
+  Eigen::Vector3d force = m_ft_sensor_rotation_eigen * force_tmp.head(3);
+  Eigen::Vector3d torque = m_ft_sensor_rotation_eigen * force_tmp.tail(3);  
 
   // Low pass fileter
   double alpha = 0.5;
-  m_ft_sensor_wrench_raw[0] = alpha * tmp[0] + (1 - alpha) * m_ft_sensor_wrench_raw[0];
-  m_ft_sensor_wrench_raw[1] = alpha * tmp[1] + (1 - alpha) * m_ft_sensor_wrench_raw[1];
-  m_ft_sensor_wrench_raw[2] = alpha * tmp[2] + (1 - alpha) * m_ft_sensor_wrench_raw[2];
-  m_ft_sensor_wrench_raw[3] = alpha * tmp[3] + (1 - alpha) * m_ft_sensor_wrench_raw[3];
-  m_ft_sensor_wrench_raw[4] = alpha * tmp[4] + (1 - alpha) * m_ft_sensor_wrench_raw[4];
-  m_ft_sensor_wrench_raw[5] = alpha * tmp[5] + (1 - alpha) * m_ft_sensor_wrench_raw[5];
+  m_ft_sensor_wrench_raw[0] = alpha * force_tmp[0] + (1 - alpha) * m_ft_sensor_wrench_raw[0];
+  m_ft_sensor_wrench_raw[1] = alpha * force_tmp[1] + (1 - alpha) * m_ft_sensor_wrench_raw[1];
+  m_ft_sensor_wrench_raw[2] = alpha * force_tmp[2] + (1 - alpha) * m_ft_sensor_wrench_raw[2];
+  m_ft_sensor_wrench_raw[3] = alpha * force_tmp[3] + (1 - alpha) * m_ft_sensor_wrench_raw[3];
+  m_ft_sensor_wrench_raw[4] = alpha * force_tmp[4] + (1 - alpha) * m_ft_sensor_wrench_raw[4];
+  m_ft_sensor_wrench_raw[5] = alpha * force_tmp[5] + (1 - alpha) * m_ft_sensor_wrench_raw[5];
 }
 
 void CartesianForceController::gravityCompensation(void)
@@ -295,16 +296,6 @@ void CartesianForceController::gravityCompensation(void)
     Eigen::Matrix<double, 4, 1> force_gravity;
     force_gravity << -10.9869, -1.6, -0.92, -7.78;
     // std::cout << "force_gravity is: " << force_gravity << std::endl;
-
-    auto kdl2Eigen = [](const KDL::Frame frame) -> Eigen::Matrix3d {
-      Eigen::Matrix3d eigen_rot;
-      for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            eigen_rot(i, j) = frame.M(i, j);
-        }
-      }
-      return eigen_rot;
-    };
 
     KDL::Frame transform_kdl;
     m_forward_kinematics_solver->JntToCart(
@@ -374,6 +365,18 @@ void CartesianForceController::gravityCompensation(void)
                         "Emergency stop triggered. Please restart robot. Force norm: " << normalized_force);
   }
 }
+
+Eigen::Matrix3d CartesianForceController::kdl2Eigen(const KDL::Frame& kdl_frame)
+{
+  Eigen::Matrix3d eigen_rot;
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+        eigen_rot(i, j) = kdl_frame.M(i, j);
+    }
+  }
+  return eigen_rot;
+}
+
 
 }
 
