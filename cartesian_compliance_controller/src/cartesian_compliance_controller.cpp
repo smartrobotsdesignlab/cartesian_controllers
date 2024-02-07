@@ -288,7 +288,6 @@ void CartesianComplianceController::jointCmdServiceCallback(
         const std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Request> request,
         std::shared_ptr<cartesian_controller_msgs::srv::JointMove::Response> response)
 {
-  m_joint_cmd_service_active = true;
   m_joint_cmd = request->cmd.data;
   m_joint_service_duration = request->duration;
   m_joint_service_start_time = Base::m_clock.now();
@@ -307,6 +306,7 @@ void CartesianComplianceController::jointCmdServiceCallback(
   response->success = true;
 
   RCLCPP_INFO(get_node()->get_logger(), "Received joint command");
+  m_joint_cmd_service_active = true;
   return;
 }
 
