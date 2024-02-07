@@ -264,6 +264,13 @@ void CartesianForceController::ftSensorWrenchCallback(const geometry_msgs::msg::
   Eigen::Vector3d force = m_ft_sensor_rotation_eigen * force_tmp.head(3);
   Eigen::Vector3d torque = m_ft_sensor_rotation_eigen * force_tmp.tail(3);  
 
+  force_tmp[0] = force[0];
+  force_tmp[1] = force[1];
+  force_tmp[2] = force[2];
+  force_tmp[3] = torque[0];
+  force_tmp[4] = torque[1];
+  force_tmp[5] = torque[2];
+
   // Low pass fileter
   double alpha = 0.5;
   m_ft_sensor_wrench_raw[0] = alpha * force_tmp[0] + (1 - alpha) * m_ft_sensor_wrench_raw[0];
