@@ -122,6 +122,28 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
       get_node()->create_publisher<geometry_msgs::msg::WrenchStamped>(
         std::string(get_node()->get_name()) + "/current_wrench", 3));
 
+  // Gravity compensation
+  m_gravity_compensation = get_node()->get_parameter("gravity_compensation").as_bool();
+  if(m_gravity_compensation)
+  {
+    RCLCPP_INFO(get_node()->get_logger(), "Gravity compensation is enabled.");
+    std::vector<double> force_gravity, torque_gravity;
+    // Declare parameters that could be set on this node
+    if (!get_node()->get_parameter("gravity_compensation_value.force", force_gravity))
+    {
+        RCLCPP_ERROR(get_node()->get_logger(), "Failed to get parameter gravity_compensation_value.force");
+        return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
+    }
+    m_force_gravity << force_gravity[0], force_gravity[1], force_gravity[2], force_gravity[3];
+
+    if (!get_node()->get_parameter("gravity_compensation_value.torque", torque_gravity))
+    {
+        RCLCPP_ERROR(get_node()->get_logger(), "Failed to get parameter gravity_compensation_value.torque");
+        return rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn::ERROR;
+    }
+    m_torque_gravity << torque_gravity[0], torque_gravity[1], torque_gravity[2], torque_gravity[3];
+  }
+
   m_target_wrench.setZero();
   m_ft_sensor_wrench.setZero();
   m_ft_sensor_wrench_raw.setZero();
@@ -293,15 +315,12 @@ void CartesianForceController::gravityCompensation(void)
   // Display ft sensor to robot base frame
   ctrl::Vector6D ft_sensor_wrench = Base::displayInBaseLink(m_ft_sensor_wrench_raw,m_new_ft_sensor_ref);
 
-  m_gravity_compensation = get_node()->get_parameter("gravity_compensation").as_bool();
   if (m_gravity_compensation)
   {
     ctrl::Vector6D gravity_comp = ctrl::Vector6D::Zero();
     // std::cout << "gravity compensation is on" << gravity_comp << std::endl;
 
     // Force compenstation
-    Eigen::Matrix<double, 4, 1> force_gravity;
-    force_gravity << -10.9869, -1.6, -0.92, -7.78;
     // std::cout << "force_gravity is: " << force_gravity << std::endl;
 
     KDL::Frame transform_kdl;
@@ -317,12 +336,10 @@ void CartesianForceController::gravityCompensation(void)
     // std::cout << "top left corner is: \r\n" << A_comp.bottomRightCorner(3,3) << std::endl;
     A_comp.bottomRightCorner(3,3) = eigen_rot;
     // std::cout << "A_comp is: \r\n" << A_comp << std::endl;
-    Eigen::Vector3d force_comp = A_comp * force_gravity;
+    Eigen::Vector3d force_comp = A_comp * m_force_gravity;
     // std::cout << "force_comp is: \r\n" << force_comp << std::endl;
 
     // Torque compensation
-    Eigen::Matrix<double, 4, 1> torque_gravity;
-    torque_gravity << 0.0531, -0.0041, -0.0109, 0.0361;
     // std::cout << "torque_gravity is: \r\n" << torque_gravity << std::endl;
     Eigen::Matrix3d cross_prod;
     cross_prod << 0., 1., 0., -1., 0., 0., 0., 0., 0.;
@@ -330,14 +347,14 @@ void CartesianForceController::gravityCompensation(void)
     Eigen::Matrix3d torque_rots = Eigen::Matrix3d::Zero();
     torque_rots.col(2) = eigen_rot.col(2);
     // std::cout << "torque_rots is: \r\n" << torque_rots << std::endl;
-    Eigen::Matrix3d At_comp_part = force_gravity[0] * cross_prod * torque_rots;
+    Eigen::Matrix3d At_comp_part = m_force_gravity[0] * cross_prod * torque_rots;
     // std::cout << "At_comp_part is: \r\n" << At_comp_part << std::endl;
     Eigen::Matrix<double, 3, 4> At_comp = Eigen::Matrix<double, 3,4>::Zero();
     At_comp.col(0) = At_comp_part.col(2);
     // std::cout << "At_comp is: \r\n" << At_comp << std::endl;
     At_comp.bottomRightCorner(3,3) = eigen_rot;
     // std::cout << "At_comp is: \r\n" << At_comp << std::endl;
-    Eigen::Vector3d torque_comp = At_comp * torque_gravity;
+    Eigen::Vector3d torque_comp = At_comp * m_torque_gravity;
     // std::cout << "torque_comp is: \r\n" << torque_comp << std::endl;
     
     gravity_comp << force_comp , torque_comp;

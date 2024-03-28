@@ -137,6 +137,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
      */
     bool m_hand_frame_control;
     bool m_gravity_compensation;
+    Eigen::Matrix<double, 4, 1> m_force_gravity, m_torque_gravity;
 
 };
 
