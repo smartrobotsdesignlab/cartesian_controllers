@@ -44,6 +44,7 @@
 #include "rclcpp/node.hpp"
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include <cartesian_controller_base/Utility.h>
+#include <cartesian_controller_base/kalman_filter.h>
 #include <functional>
 #include <hardware_interface/loaned_command_interface.hpp>
 #include <hardware_interface/loaned_state_interface.hpp>
@@ -197,6 +198,7 @@ class IKSolver
     std::shared_ptr<KDL::ChainFkSolverVel_recursive>  m_fk_vel_solver;
     KDL::Frame      m_end_effector_pose;
     ctrl::Vector6D  m_end_effector_vel;
+    std::vector<std::shared_ptr<KalmanFilter>> kalman_filters_ptr;
 };
 
 

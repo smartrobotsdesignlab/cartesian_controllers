@@ -59,6 +59,7 @@ add_library(${PROJECT_NAME} SHARED
   src/SpatialPDController.cpp
   src/PDController.cpp
   src/IKSolver.cpp
+  src/kalman_filter.cpp
 )
 
 # Manual includes for local directories and non-ament packages
@@ -82,6 +83,7 @@ add_library(ik_solvers SHARED
   src/JacobianTransposeSolver.cpp
   src/DampedLeastSquaresSolver.cpp
   src/SelectivelyDampedLeastSquaresSolver.cpp
+  src/kalman_filter.cpp
 )
 
 target_include_directories(ik_solvers
@@ -97,6 +99,21 @@ ament_target_dependencies(ik_solvers
         ${${PROJECT_NAME}_EXPORTED_TARGETS}
         ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
+
+# add_library(kalman_filter SHARED
+#   src/kalman_filter.cpp
+# )
+
+# target_include_directories(kalman_filter
+#   PUBLIC
+#     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#     $<INSTALL_INTERFACE:include>
+# )
+
+# ament_target_dependencies(kalman_filter
+#         ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#         ${THIS_PACKAGE_INCLUDE_DEPENDS}
+# )
 
 
 #--------------------------------------------------------------------------------

@@ -139,6 +139,20 @@ namespace cartesian_controller_base{
     m_fk_pos_solver.reset(new KDL::ChainFkSolverPos_recursive(m_chain));
     m_fk_vel_solver.reset(new KDL::ChainFkSolverVel_recursive(m_chain));
 
+    // Kalman filter for calculating cartesian velocities
+    double dt = 0.004; // 4 ms
+    // std::shared_ptr<KalmanFilter> kalman_filter_ptr;
+    kalman_filters_ptr.resize(6);
+    Eigen::Vector3d initial_state = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d initial_covariance = Eigen::Matrix3d::Identity();
+    Eigen::Matrix3d transition_matrix = (Eigen::Matrix3d() << 1, dt, 0, 0, 1, dt, 0, 0, 1).finished();
+    Eigen::Vector3d observation_matrix = (Eigen::Vector3d() << 1, 0, 0).finished();
+    Eigen::Matrix3d process_noise = (Eigen::Matrix3d() << pow(dt,4)/4, pow(dt,3)/2, pow(dt,2)/2, pow(dt,3)/2, pow(dt,2), dt, pow(dt,2)/2, dt, 1).finished();
+    double measurement_noise = 0.002;
+    for (size_t i = 0; i < kalman_filters_ptr.size(); ++i)
+    {
+      kalman_filters_ptr[i].reset(new KalmanFilter(initial_state, initial_covariance, transition_matrix, observation_matrix, process_noise, measurement_noise));
+    }
     return true;
   }
 
@@ -148,14 +162,17 @@ namespace cartesian_controller_base{
     m_fk_pos_solver->JntToCart(m_current_positions,m_end_effector_pose);
 
     // Absolute velocity w. r. t. base
-    KDL::FrameVel vel;
-    m_fk_vel_solver->JntToCart(KDL::JntArrayVel(m_current_positions,m_current_velocities),vel);
-    m_end_effector_vel[0] = vel.deriv().vel.x();
-    m_end_effector_vel[1] = vel.deriv().vel.y();
-    m_end_effector_vel[2] = vel.deriv().vel.z();
-    m_end_effector_vel[3] = vel.deriv().rot.x();
-    m_end_effector_vel[4] = vel.deriv().rot.y();
-    m_end_effector_vel[5] = vel.deriv().rot.z();
+    std::vector<double> poses;
+    poses.resize(6);
+    poses = {m_end_effector_pose.p.x(), m_end_effector_pose.p.y(), m_end_effector_pose.p.z()};
+    m_end_effector_pose.M.GetRPY(poses[3], poses[4], poses[5]);
+    for (size_t i = 0; i < kalman_filters_ptr.size(); i++)
+    {
+      kalman_filters_ptr[i]->predict();
+      Eigen::Vector3d state = kalman_filters_ptr[i]->update( Eigen::Vector3d(poses[i], 0, 0));
+      m_end_effector_vel[i] = state[1];
+    }
+    
   }
 
   void IKSolver::applyJointLimits()
