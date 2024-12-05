@@ -144,6 +144,10 @@ rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn Cartes
     m_torque_gravity << torque_gravity[0], torque_gravity[1], torque_gravity[2], torque_gravity[3];
   }
 
+  // Force state publish default 
+  auto_declare<bool>("force_state_pub", true);
+  m_force_state_pub = get_node()->get_parameter("force_state_pub").as_bool();
+
   m_target_wrench.setZero();
   m_ft_sensor_wrench.setZero();
   m_ft_sensor_wrench_raw.setZero();
@@ -314,6 +318,7 @@ void CartesianForceController::gravityCompensation(void)
   
   // Display ft sensor to robot base frame
   ctrl::Vector6D ft_sensor_wrench = Base::displayInBaseLink(m_ft_sensor_wrench_raw,m_new_ft_sensor_ref);
+  ctrl::Vector6D ft_sensor_wrench_tmp;
 
   if (m_gravity_compensation)
   {
@@ -360,23 +365,38 @@ void CartesianForceController::gravityCompensation(void)
     gravity_comp << force_comp , torque_comp;
     // std::cout << "gravity compensation is: \r\n" << gravity_comp << std::endl;
 
-    m_ft_sensor_wrench = ft_sensor_wrench - gravity_comp;
+    ft_sensor_wrench_tmp = ft_sensor_wrench - gravity_comp;
   }
   else
   {
-    m_ft_sensor_wrench = ft_sensor_wrench;
+    ft_sensor_wrench_tmp = ft_sensor_wrench;
   }
 
-  // Publish current wrench
+  double started_duration = Base::m_clock.now().seconds() - Base::m_start_time.seconds();
+  double smooth_duratiuon = 0.5;
+  double start_time = 0.5;
+  if (started_duration < start_time){
+    m_ft_sensor_wrench_start = ft_sensor_wrench_tmp;
+  }
+  else if (started_duration >= start_time && started_duration < (start_time + smooth_duratiuon)){
+    m_ft_sensor_wrench = m_ft_sensor_wrench_start * (started_duration - start_time)/smooth_duratiuon + (ft_sensor_wrench_tmp - m_ft_sensor_wrench_start);
+  }
+  else {
+    m_ft_sensor_wrench = ft_sensor_wrench_tmp;
+  }
+
+  // Publish current wrench if force enable is true
   if (m_feedback_force_publisher->trylock() && !m_emergency_stop){
     m_feedback_force_publisher->msg_.header.stamp = Base::m_clock.now();
-    m_feedback_force_publisher->msg_.header.frame_id = m_robot_base_link;
-    m_feedback_force_publisher->msg_.wrench.force.x = m_ft_sensor_wrench[0];
-    m_feedback_force_publisher->msg_.wrench.force.y = m_ft_sensor_wrench[1];
-    m_feedback_force_publisher->msg_.wrench.force.z = m_ft_sensor_wrench[2];
-    m_feedback_force_publisher->msg_.wrench.torque.x = m_ft_sensor_wrench[3];
-    m_feedback_force_publisher->msg_.wrench.torque.y = m_ft_sensor_wrench[4];
-    m_feedback_force_publisher->msg_.wrench.torque.z = m_ft_sensor_wrench[5];
+      m_feedback_force_publisher->msg_.header.frame_id = m_robot_base_link;
+    if (m_force_state_pub){
+      m_feedback_force_publisher->msg_.wrench.force.x = m_ft_sensor_wrench[0];
+      m_feedback_force_publisher->msg_.wrench.force.y = m_ft_sensor_wrench[1];
+      m_feedback_force_publisher->msg_.wrench.force.z = m_ft_sensor_wrench[2];
+      m_feedback_force_publisher->msg_.wrench.torque.x = m_ft_sensor_wrench[3];
+      m_feedback_force_publisher->msg_.wrench.torque.y = m_ft_sensor_wrench[4];
+      m_feedback_force_publisher->msg_.wrench.torque.z = m_ft_sensor_wrench[5];
+    }
 
     m_feedback_force_publisher->unlockAndPublish();
   }

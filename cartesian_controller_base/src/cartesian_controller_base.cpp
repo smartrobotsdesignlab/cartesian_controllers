@@ -481,6 +481,7 @@ void CartesianControllerBase::computeJointControlCmds(const ctrl::Vector6D& erro
   m_ik_solver->updateKinematics();
   if (!m_compute_initialized){
     m_compute_initialized = true;
+    m_start_time = m_clock.now();
   }
 }
 

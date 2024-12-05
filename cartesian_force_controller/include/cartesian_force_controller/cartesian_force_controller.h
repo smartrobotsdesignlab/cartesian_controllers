@@ -125,6 +125,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
     ctrl::Vector6D        m_target_wrench;
     ctrl::Vector6D        m_ft_sensor_wrench;
     ctrl::Vector6D        m_ft_sensor_wrench_raw;
+    ctrl::Vector6D        m_ft_sensor_wrench_start;
     std::string           m_ft_sensor_ref_link;
     KDL::Frame            m_ft_sensor_transform;
     Eigen::Matrix3d       m_ft_sensor_rotation_eigen;
@@ -137,6 +138,7 @@ class CartesianForceController : public virtual cartesian_controller_base::Carte
      */
     bool m_hand_frame_control;
     bool m_gravity_compensation;
+    bool m_force_state_pub;
     Eigen::Matrix<double, 4, 1> m_force_gravity, m_torque_gravity;
 
 };
